@@ -1,0 +1,103 @@
+variables:
+  API_IMAGE: dommin/laravel-api:$CI_COMMIT_SHA
+  SCHEDULER_IMAGE: dommin/laravel-scheduler:$CI_COMMIT_SHA
+  WORKER_IMAGE: dommin/laravel-worker:$CI_COMMIT_SHA
+  NGINX_IMAGE: dommin/laravel-nginx:$CI_COMMIT_SHA
+  PROXY_IMAGE: dommin/laravel-proxy:$CI_COMMIT_SHA
+  MYSQL_IMAGE: dommin/laravel-mysql:$CI_COMMIT_SHA
+  FRONTEND_IMAGE: dommin/laravel-frontend:$CI_COMMIT_SHA
+
+stages:
+  - build
+  - analyze
+  - test
+  - deploy
+
+build-backend-images:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $API_IMAGE --target=api --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
+    - docker build -t $SCHEDULER_IMAGE --target=scheduler --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
+    - docker build -t $WORKER_IMAGE --target=worker --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
+    - docker push $API_IMAGE
+    - docker push $SCHEDULER_IMAGE
+    - docker push $WORKER_IMAGE
+
+build-mysql:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $MYSQL_IMAGE --build-arg password=$DB_PASSWORD -f ./Dockerfile.mysql .
+    - docker push $MYSQL_IMAGE
+
+analyze:
+  stage: analyze
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $API_IMAGE
+    - docker pull $MYSQL_IMAGE
+    - docker run --rm -t $API_IMAGE ./vendor/bin/phpstan analyze --memory-limit=1G
+    - docker run --rm -t $API_IMAGE php artisan insights --no-interaction --min-quality=90 --min-complexity=90 --min-architecture=90 --min-style=90 --ansi --format=github-action
+
+test:
+  stage: test
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $API_IMAGE
+    - docker pull $MYSQL_IMAGE
+    - docker-compose -f docker-compose.ci.yml up -d
+    - docker-compose -f docker-compose.ci.yml exec -T api php artisan test
+
+remove-images:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - ./deployment/bin/remove-image.sh dommin/laravel-api $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/laravel-mysql $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/laravel-worker $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/laravel-scheduler $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+
+build-nginx:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $NGINX_IMAGE -f ./Dockerfile.nginx .
+    - docker push $NGINX_IMAGE
+
+build-proxy:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $PROXY_IMAGE -f ./Dockerfile.proxy .
+    - docker push $PROXY_IMAGE
+
+build-frontend:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $FRONTEND_IMAGE --target=prod -f ./frontend/Dockerfile .
+    - docker push $FRONTEND_IMAGE
