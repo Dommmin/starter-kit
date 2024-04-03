@@ -1,3 +1,4 @@
 ﻿.idea/
 mysqldata/
 redisdata/
+api/supervisord.pid
