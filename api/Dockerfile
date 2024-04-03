@@ -24,7 +24,7 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
 RUN pecl install redis swoole && docker-php-ext-enable swoole
 
-COPY --from=composer:2.5.8 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 RUN useradd -G www-data,root -u $uid -d /home/$user $user
 
@@ -35,13 +35,12 @@ COPY ./api/composer*.json /usr/src/
 COPY ./api/package*.json /usr/src/
 COPY ./deployment/config/php-fpm/php-prod.ini /usr/local/etc/php/conf.d/php.ini
 COPY ./deployment/config/php-fpm/www.conf /usr/local/etc/php-fpm.d/www.conf
-COPY ./deployment/bin/update.sh /usr/src/update.sh
 
 RUN composer install --no-scripts
 
 COPY ./api .
 
-RUN php artisan storage:link
+COPY --chown=$user:$user ./api .
 
 USER $user
 
