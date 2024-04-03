@@ -31,7 +31,7 @@ services:
       context: .
       dockerfile: ./api/Dockerfile
       target: api
-    command: sh -c "composer install --no-scripts && /usr/src/migration.sh && php-fpm"
+    command: sh -c "composer install --no-scripts && chmod +x /usr/src/migration.sh && /usr/src/migration.sh && php-fpm"
     restart: unless-stopped
     volumes:
       - ./api:/usr/src
