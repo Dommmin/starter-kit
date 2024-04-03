@@ -78,6 +78,8 @@ jobs:
         run: docker pull $API_IMAGE
       - name: Pull MySQL image
         run: docker pull $MYSQL_IMAGE
+      - name: Set permissions
+        run: chmod -R 777 /usr/src
       - name: Run tests
         run: |
           docker-compose -f docker-compose.ci.yml up -d
