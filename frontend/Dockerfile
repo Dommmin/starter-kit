@@ -15,7 +15,7 @@ CMD ["npm", "run", "dev"]
 FROM base AS build
 RUN npm run build
 
-FROM nginx:1.25.1 AS prod
+FROM nginx:alpine AS prod
 COPY --from=build /usr/src/dist /usr/share/nginx/html
 COPY ./deployment/config/nginx-frontend.conf /etc/nginx/nginx.conf
 EXPOSE 80

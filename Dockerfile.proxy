@@ -1,4 +1,4 @@
-FROM nginx:1.25.1
+FROM nginx:alpine
 
 COPY ./deployment/config/proxy.conf /etc/nginx/nginx.conf
 
