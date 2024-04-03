@@ -1,11 +1,11 @@
 variables:
-  API_IMAGE: dommin/laravel-api:$CI_COMMIT_SHA
-  SCHEDULER_IMAGE: dommin/laravel-scheduler:$CI_COMMIT_SHA
-  WORKER_IMAGE: dommin/laravel-worker:$CI_COMMIT_SHA
-  NGINX_IMAGE: dommin/laravel-nginx:$CI_COMMIT_SHA
-  PROXY_IMAGE: dommin/laravel-proxy:$CI_COMMIT_SHA
-  MYSQL_IMAGE: dommin/laravel-mysql:$CI_COMMIT_SHA
-  FRONTEND_IMAGE: dommin/laravel-frontend:$CI_COMMIT_SHA
+  API_IMAGE: dommin/gitlab-api:$CI_COMMIT_SHA
+  SCHEDULER_IMAGE: dommin/gitlab-scheduler:$CI_COMMIT_SHA
+  WORKER_IMAGE: dommin/gitlab-worker:$CI_COMMIT_SHA
+  NGINX_IMAGE: dommin/gitlab-nginx:$CI_COMMIT_SHA
+  PROXY_IMAGE: dommin/gitlab-proxy:$CI_COMMIT_SHA
+  MYSQL_IMAGE: dommin/gitlab-mysql:$CI_COMMIT_SHA
+  FRONTEND_IMAGE: dommin/gitlab-frontend:$CI_COMMIT_SHA
 
 stages:
   - build
@@ -19,17 +19,13 @@ build-backend-images:
   services:
     - docker:dind
   script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $API_IMAGE --target=api --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
     - docker build -t $SCHEDULER_IMAGE --target=scheduler --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
     - docker build -t $WORKER_IMAGE --target=worker --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
-    - docker save $API_IMAGE | gzip > api_image.tar.gz
-    - docker save $SCHEDULER_IMAGE | gzip > scheduler_image.tar.gz
-    - docker save $WORKER_IMAGE | gzip > worker_image.tar.gz
-  cache:
-    paths:
-      - api_image.tar.gz
-      - scheduler_image.tar.gz
-      - worker_image.tar.gz
+    - docker push $API_IMAGE
+    - docker push $SCHEDULER_IMAGE
+    - docker push $WORKER_IMAGE
 
 build-mysql:
   stage: build
@@ -37,11 +33,9 @@ build-mysql:
   services:
     - docker:dind
   script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $MYSQL_IMAGE --build-arg password=$DB_PASSWORD -f ./Dockerfile.mysql .
-    - docker save $MYSQL_IMAGE | gzip > mysql_image.tar.gz
-  cache:
-    paths:
-      - mysql_image.tar.gz
+    - docker push $MYSQL_IMAGE
 
 analyze:
   stage: analyze
@@ -49,8 +43,9 @@ analyze:
   services:
     - docker:dind
   script:
-    - docker load < api_image.tar.gz
-    - docker load < mysql_image.tar.gz
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $API_IMAGE
+    - docker pull $MYSQL_IMAGE
     - docker run --rm -t $API_IMAGE ./vendor/bin/phpstan analyze --memory-limit=1G
     - docker run --rm -t $API_IMAGE php artisan insights --no-interaction --min-quality=90 --min-complexity=90 --min-architecture=90 --min-style=90 --ansi --format=github-action
 
@@ -60,8 +55,9 @@ test:
   services:
     - docker:dind
   script:
-    - docker load < api_image.tar.gz
-    - docker load < mysql_image.tar.gz
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $API_IMAGE
+    - docker pull $MYSQL_IMAGE
     - docker-compose -f docker-compose.ci.yml up -d
     - docker-compose -f docker-compose.ci.yml exec -T api php artisan test
 
@@ -71,10 +67,10 @@ remove-images:
   services:
     - docker:dind
   script:
-    - ./deployment/bin/remove-image.sh dommin/laravel-api $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
-    - ./deployment/bin/remove-image.sh dommin/laravel-mysql $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
-    - ./deployment/bin/remove-image.sh dommin/laravel-worker $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
-    - ./deployment/bin/remove-image.sh dommin/laravel-scheduler $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/gitlab-api $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/gitlab-mysql $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/gitlab-worker $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
+    - ./deployment/bin/remove-image.sh dommin/gitlab-scheduler $CI_COMMIT_SHA $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD
 
 build-nginx:
   stage: deploy
@@ -84,6 +80,7 @@ build-nginx:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $NGINX_IMAGE -f ./Dockerfile.nginx .
+    - docker push $NGINX_IMAGE
 
 build-proxy:
   stage: deploy
@@ -93,6 +90,7 @@ build-proxy:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $PROXY_IMAGE -f ./Dockerfile.proxy .
+    - docker push $PROXY_IMAGE
 
 build-frontend:
   stage: deploy
@@ -102,3 +100,4 @@ build-frontend:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $FRONTEND_IMAGE --target=prod -f ./frontend/Dockerfile .
+    - docker push $FRONTEND_IMAGE
