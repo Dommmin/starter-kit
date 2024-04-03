@@ -22,7 +22,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
-RUN pecl install redis swoole && docker-php-ext-enable swoole
+RUN pecl install redis swoole xdebug && docker-php-ext-enable swoole xdebug
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
