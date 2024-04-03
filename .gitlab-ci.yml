@@ -23,9 +23,6 @@ build-backend-images:
     - docker build -t $API_IMAGE --target=api --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
     - docker build -t $SCHEDULER_IMAGE --target=scheduler --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
     - docker build -t $WORKER_IMAGE --target=worker --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
-    - docker push $API_IMAGE
-    - docker push $SCHEDULER_IMAGE
-    - docker push $WORKER_IMAGE
 
 build-mysql:
   stage: build
@@ -35,7 +32,6 @@ build-mysql:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $MYSQL_IMAGE --build-arg password=$DB_PASSWORD -f ./Dockerfile.mysql .
-    - docker push $MYSQL_IMAGE
 
 analyze:
   stage: analyze
@@ -80,7 +76,6 @@ build-nginx:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $NGINX_IMAGE -f ./Dockerfile.nginx .
-    - docker push $NGINX_IMAGE
 
 build-proxy:
   stage: deploy
@@ -90,7 +85,6 @@ build-proxy:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $PROXY_IMAGE -f ./Dockerfile.proxy .
-    - docker push $PROXY_IMAGE
 
 build-frontend:
   stage: deploy
@@ -100,4 +94,3 @@ build-frontend:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $FRONTEND_IMAGE --target=prod -f ./frontend/Dockerfile .
-    - docker push $FRONTEND_IMAGE
