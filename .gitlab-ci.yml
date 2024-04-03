@@ -19,10 +19,17 @@ build-backend-images:
   services:
     - docker:dind
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $API_IMAGE --target=api --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
     - docker build -t $SCHEDULER_IMAGE --target=scheduler --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
     - docker build -t $WORKER_IMAGE --target=worker --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
+    - docker save $API_IMAGE | gzip > api_image.tar.gz
+    - docker save $SCHEDULER_IMAGE | gzip > scheduler_image.tar.gz
+    - docker save $WORKER_IMAGE | gzip > worker_image.tar.gz
+  cache:
+    paths:
+      - api_image.tar.gz
+      - scheduler_image.tar.gz
+      - worker_image.tar.gz
 
 build-mysql:
   stage: build
@@ -30,8 +37,11 @@ build-mysql:
   services:
     - docker:dind
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $MYSQL_IMAGE --build-arg password=$DB_PASSWORD -f ./Dockerfile.mysql .
+    - docker save $MYSQL_IMAGE | gzip > mysql_image.tar.gz
+  cache:
+    paths:
+      - mysql_image.tar.gz
 
 analyze:
   stage: analyze
@@ -39,9 +49,8 @@ analyze:
   services:
     - docker:dind
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker pull $API_IMAGE
-    - docker pull $MYSQL_IMAGE
+    - docker load < api_image.tar.gz
+    - docker load < mysql_image.tar.gz
     - docker run --rm -t $API_IMAGE ./vendor/bin/phpstan analyze --memory-limit=1G
     - docker run --rm -t $API_IMAGE php artisan insights --no-interaction --min-quality=90 --min-complexity=90 --min-architecture=90 --min-style=90 --ansi --format=github-action
 
@@ -51,9 +60,8 @@ test:
   services:
     - docker:dind
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker pull $API_IMAGE
-    - docker pull $MYSQL_IMAGE
+    - docker load < api_image.tar.gz
+    - docker load < mysql_image.tar.gz
     - docker-compose -f docker-compose.ci.yml up -d
     - docker-compose -f docker-compose.ci.yml exec -T api php artisan test
 
