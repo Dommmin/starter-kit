@@ -3,8 +3,6 @@ import Modal from '../../components/Modal';
 import DangerButton from '../../components/DangerButton';
 import InputError from '../../components/InputError.jsx';
 import axios from '../../lib/axios.js';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/auth.js';
 
 export default function DeleteUserForm({ className = '' }) {
    const [confirmingUserDeletion, setConfirmingUserDeletion] = useState(false);
