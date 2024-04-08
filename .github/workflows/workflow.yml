@@ -4,142 +4,41 @@ on:
   push:
     branches: [ "main" ]
 
-env:
-  API_IMAGE: dommin/laravel-api:${{ github.sha }}
-  SCHEDULER_IMAGE: dommin/laravel-scheduler:${{ github.sha }}
-  WORKER_IMAGE: dommin/laravel-worker:${{ github.sha }}
-  NGINX_IMAGE: dommin/laravel-nginx:${{ github.sha }}
-  PROXY_IMAGE: dommin/laravel-proxy:${{ github.sha }}
-  MYSQL_IMAGE: dommin/laravel-mysql:${{ github.sha }}
-  FRONTEND_IMAGE: dommin/laravel-frontend:${{ github.sha }}
-  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-
 jobs:
-  build-backend-images:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build images
-        run: |
-          docker build -t $API_IMAGE --target=api --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
-          docker build -t $SCHEDULER_IMAGE --target=scheduler --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
-          docker build -t $WORKER_IMAGE --target=worker --build-arg user=dominik --build-arg uid=1000 -f ./api/Dockerfile .
-      - name: Push images
-        run: |
-          docker push $API_IMAGE
-          docker push $SCHEDULER_IMAGE
-          docker push $WORKER_IMAGE
-
-  build-mysql:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build MySQL image
-        run: docker build -t $MYSQL_IMAGE --build-arg password=${{ secrets.DB_PASSWORD }} -f ./Dockerfile.mysql .
-      - name: Push Mysql image
-        run: docker push $MYSQL_IMAGE
-
   analyze:
-    needs: [build-backend-images, build-mysql]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Pull API image
-        run: docker pull $API_IMAGE
-      - name: Pull MySQL image
-        run: docker pull $MYSQL_IMAGE
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql # Add the extensions you need
+          coverage: none
+      - name: Install Dependencies
+        run: composer install --prefer-dist --no-progress --no-suggest
       - name: Run phpstan
-        run: docker run --rm -t $API_IMAGE ./vendor/bin/phpstan analyze --memory-limit=1G
+        run: ./vendor/bin/phpstan analyze --memory-limit=1G
       - name: Run phpinsights
-        run: docker run --rm -t $API_IMAGE php artisan insights --no-interaction --min-quality=90 --min-complexity=80 --min-architecture=90 --min-style=90 --ansi --format=github-action
+        run: php artisan insights --no-interaction --min-quality=90 --min-complexity=80 --min-architecture=90 --min-style=90 --ansi --format=github-action
 
   test:
-    needs: [ build-backend-images, build-mysql ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Pull Docker images
-        run: |
-            docker pull $API_IMAGE
-            docker pull $MYSQL_IMAGE
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql # Add the extensions you need
+          coverage: none
+      - name: Install Dependencies
+        run: composer install --prefer-dist --no-progress --no-suggest
       - name: Run tests
-        run: |
-          docker-compose -f docker-compose.ci.yml up -d
-          docker-compose -f docker-compose.ci.yml exec -T api composer pest
+        run: composer pest
       - name: Capture test results
         if: always()
         uses: actions/upload-artifact@v2
         with:
           name: test-results
           path: tests/results
-
-  remove-images:
-    needs: [ analyze, test ]
-    runs-on: ubuntu-latest
-    if: ${{ always() && contains(needs.*.result, 'failure') }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Remove images
-        run: |
-          ./deployment/bin/remove-image.sh dommin/laravel-api ${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }} ${{ secrets.DOCKERHUB_PASSWORD }}
-          ./deployment/bin/remove-image.sh dommin/laravel-mysql ${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }} ${{ secrets.DOCKERHUB_PASSWORD }}
-          ./deployment/bin/remove-image.sh dommin/laravel-worker ${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }} ${{ secrets.DOCKERHUB_PASSWORD }}
-          ./deployment/bin/remove-image.sh dommin/laravel-scheduler ${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }} ${{ secrets.DOCKERHUB_PASSWORD }}
-
-  build-nginx:
-    needs: [ analyze, test ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build nginx image
-        run: |
-          docker build -t $NGINX_IMAGE -f ./Dockerfile.nginx .
-          docker push $NGINX_IMAGE
-
-  build-proxy:
-    needs: [ analyze, test ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build nginx image
-        run: |
-          docker build -t $PROXY_IMAGE -f ./Dockerfile.proxy .
-          docker push $PROXY_IMAGE
-
-  build-frontend:
-    needs: [ analyze, test ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build frontend image
-        run: |
-          docker build -t $FRONTEND_IMAGE --target=prod -f ./frontend/Dockerfile .
-          docker push $FRONTEND_IMAGE
