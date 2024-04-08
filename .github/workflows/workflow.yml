@@ -36,7 +36,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: mbstring, pdo_mysql # Add the extensions you need
+          extensions: mbstring, pdo_mysql
           coverage: none
       - name: Install Dependencies
         run: |
@@ -48,7 +48,7 @@ jobs:
           composer pest
       - name: Capture test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: api/tests/results
