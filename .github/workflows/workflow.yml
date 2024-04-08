@@ -15,14 +15,18 @@ jobs:
           php-version: '8.2'
           extensions: mbstring, pdo_mysql # Add the extensions you need
           coverage: none
-      - name: Change to API directory
-        run: cd api
       - name: Install Dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: |
+          cd api
+          composer install --prefer-dist --no-progress
       - name: Run phpstan
-        run: ./vendor/bin/phpstan analyze --memory-limit=1G
+        run: |
+          cd api
+          ./vendor/bin/phpstan analyze --memory-limit=1G
       - name: Run phpinsights
-        run: php artisan insights --no-interaction --min-quality=90 --min-complexity=80 --min-architecture=90 --min-style=90 --ansi --format=github-action
+        run: |
+          cd api
+          php artisan insights --no-interaction --min-quality=90 --min-complexity=80 --min-architecture=90 --min-style=90 --ansi --format=github-action
 
   test:
     runs-on: ubuntu-latest
@@ -34,15 +38,17 @@ jobs:
           php-version: '8.2'
           extensions: mbstring, pdo_mysql # Add the extensions you need
           coverage: none
-      - name: Change to API directory
-        run: cd api
       - name: Install Dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: |
+          cd api
+          composer install --prefer-dist --no-progress
       - name: Run tests
-        run: composer pest
+        run: |
+          cd api
+          composer pest
       - name: Capture test results
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: test-results
-          path: tests/results
+          path: api/tests/results
